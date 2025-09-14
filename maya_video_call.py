@@ -9,10 +9,11 @@ from langchain_groq import ChatGroq
 from langchain.memory import ConversationBufferMemory
 from langchain.schema import HumanMessage, SystemMessage
 import logging
+import time
 from dotenv import load_dotenv
 
 # ============ CONFIGURATION ============
-load_dotenv(dotenv_path=r"C:\Users\user\Desktop\Skooliq\Video Call\.env", override=True)
+load_dotenv(dotenv_path=r".env", override=True)
 GROQ_API_KEY = os.getenv("GROQ_API_KEY")
 MODEL_NAME = os.getenv("MODEL_NAME")
 TTS_VOICE = os.getenv("TTS_VOICE")
@@ -189,7 +190,7 @@ class MayaAI:
         return any(word in text.lower() for word in goodbye_words)
 
     async def run_conversation(self):
-        """Main conversation loop"""
+        """Main conversation loop with inactivity + session timeout"""
         print("=" * 50)
         print("🤖 Maya AI Companion — Real-Time Chat")
         print("=" * 50)
@@ -199,14 +200,30 @@ class MayaAI:
         # Greeting
         await self.speak("Hey! I'm Maya. How are you feeling today?")
 
+        session_start = time.time()
+        last_activity = time.time()
+        SESSION_LIMIT = 5 * 60        # 5 minutes
+        INACTIVITY_LIMIT = 2 * 60     # 2 minutes
+
         while True:
             try:
+                # Check total session timeout
+                if time.time() - session_start > SESSION_LIMIT:
+                    await self.speak("Our session is ending now. See you next time!")
+                    break
+
+                # Check inactivity timeout
+                if time.time() - last_activity > INACTIVITY_LIMIT:
+                    await self.speak("I didn’t hear you for a while, so I’ll end our chat. Bye!")
+                    break
+
                 user_input = self.listen_for_speech()
 
                 if not user_input:
-                    await self.speak("I didn’t catch that. Could you repeat?")
+                    # no input, loop continues, but still track inactivity
                     continue
 
+                last_activity = time.time()  # reset inactivity timer
                 print(f"You: {user_input}")
 
                 if self.is_goodbye(user_input):
@@ -231,6 +248,7 @@ class MayaAI:
         print("\n" + "=" * 50)
         print("Conversation ended. Session memory cleared.")
         print("=" * 50)
+
 
 
 # ============ MAIN ============
