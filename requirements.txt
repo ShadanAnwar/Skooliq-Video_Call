@@ -1,0 +1,8 @@
+streamlit
+asyncio
+speechrecognition
+edge-tts
+playsound==1.2.2
+langchain
+langchain-groq
+python-dotenv
