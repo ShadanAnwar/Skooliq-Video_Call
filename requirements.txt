@@ -1,9 +1,57 @@
-streamlit
-asyncio
-speechrecognition
-edge-tts
-playsound==1.2.2
-langchain
-langchain-groq
-python-dotenv
-time
+# ============ MAYA AI ENHANCED REQUIREMENTS ============
+
+# Core AI and Language Processing
+langchain==0.1.0
+langchain-groq==0.0.1
+openai-whisper==20231117
+openai==1.3.0
+
+# Speech Recognition & Audio Processing
+SpeechRecognition==3.10.0
+pyaudio==0.2.11
+pygame==2.5.2
+pydub==0.25.1
+
+# Text-to-Speech Engines
+edge-tts==6.1.9
+elevenlabs==0.2.26
+gTTS==2.4.0
+
+# Audio Playback (multiple options for compatibility)
+playsound==1.3.0
+pydub==0.25.1
+simpleaudio==1.0.4
+
+# Environment & Configuration
+python-dotenv==1.0.0
+python-decouple==3.8
+
+# HTTP Requests & API Calls
+requests==2.31.0
+aiohttp==3.9.1
+httpx==0.26.0
+
+# Data Processing & Utilities
+numpy==1.24.3
+scipy==1.11.4
+librosa==0.10.1  # Advanced audio processing
+soundfile==0.12.1
+
+# Logging & Monitoring
+coloredlogs==15.0.1
+rich==13.7.0
+
+# Optional Dependencies for Advanced Features (FREE)
+torch==2.1.0  # For Whisper GPU acceleration (optional)
+torchaudio==2.1.0  # For advanced audio processing (optional)
+
+# Development & Testing
+pytest==7.4.3
+pytest-asyncio==0.21.1
+black==23.11.0
+flake8==6.1.0
+
+# Platform-specific audio dependencies
+# Windows: pip install pywin32
+# Linux: sudo apt-get install portaudio19-dev python3-pyaudio
+# macOS: brew install portaudio
