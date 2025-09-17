@@ -10,6 +10,7 @@ from langchain.memory import ConversationBufferMemory
 from langchain.schema import HumanMessage, SystemMessage
 import logging
 import time
+import pygame
 from dotenv import load_dotenv
 
 # ============ CONFIGURATION ============
@@ -23,6 +24,7 @@ MAX_TOKENS = 150
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger("Maya")
 
+
 # ============ MAYA AI COMPANION ============
 class MayaAI:
     def __init__(self):
@@ -30,7 +32,24 @@ class MayaAI:
         self.recognizer = sr.Recognizer()
         self.microphone = sr.Microphone()
 
-        # Initialize Groq AI client
+        # ---------- Pygame setup ----------
+        pygame.init()
+        self.screen = pygame.display.set_mode((500, 700))
+        pygame.display.set_caption("Maya Video Call")
+        self.clock = pygame.time.Clock()
+
+        # Load & scale images once
+        self.mouth_half = pygame.image.load("assets/mouth_half_opened.png")
+        self.mouth_closed = pygame.image.load("assets/mouth_closed.png")
+        self.mouth_open = pygame.image.load("assets/mouth_full_opened.png")
+
+        self.mouth_half = pygame.transform.smoothscale(self.mouth_half, self.screen.get_size())
+        self.mouth_closed = pygame.transform.smoothscale(self.mouth_closed, self.screen.get_size())
+        self.mouth_open = pygame.transform.smoothscale(self.mouth_open, self.screen.get_size())
+
+        self.current_face = self.mouth_closed
+
+        # ---------- AI client setup ----------
         try:
             if GROQ_API_KEY:
                 self.ai_client = ChatGroq(
@@ -47,48 +66,37 @@ class MayaAI:
             logger.error(f"AI client setup failed: {e}")
             self.ai_client = None
 
-        # Use LangChain memory for better context
+        # Conversation memory
         self.memory = ConversationBufferMemory(return_messages=True)
 
-        # Calibrate microphone
+        # Calibrate mic
         self._calibrate_microphone()
 
+    # ---------- Personality ----------
     def get_system_prompt(self) -> str:
-        """
-        Defines Maya's personality, tone, and rules for interacting with students (Class 1–12).
-
-        - Acts as a friendly, empathetic, and playful AI tutor & friend.
-        - Adapts tone based on student level:
-            • Class 1–3 → Simple, playful, short sentences.
-            • Class 4–8 → Step-by-step, fun facts, balanced tone.
-            • Class 9–12 → Respectful, deeper insights, career hints.
-        - Always positive, safe, and educational.
-        - Avoids sensitive or inappropriate topics.
-        - Keeps responses short (~40 words) and natural.
-        """
         return (
             "You are Maya, an empathetic, playful, and emotionally intelligent AI tutor and friend "
             "who talks to students from class 1 to 12. "
             "Your responses must follow these rules:\n"
             "\n--- TONE ---\n"
             "- Friendly, warm, and encouraging.\n"
-            "- Use simple words for younger kids, balanced tone for middle grades, and slightly deeper explanations for teens.\n"
+            "- Use simple words for younger kids, balanced tone for middle grades, and deeper explanations for teens.\n"
             "- Always sound supportive and fun.\n"
             "\n--- AUDIENCE ---\n"
-            "1. For classes 1-3: Use playful examples, short sentences, and sometimes rhymes.\n"
-            "2. For classes 4-8: Use simple step-by-step explanations and fun facts.\n"
-            "3. For classes 9-12: Be more respectful, provide deeper reasoning, and offer career hints when relevant.\n"
+            "1. For classes 1-3: Playful, short sentences, sometimes rhymes.\n"
+            "2. For classes 4-8: Simple step-by-step explanations and fun facts.\n"
+            "3. For classes 9-12: Respectful, deeper reasoning, career hints.\n"
             "\n--- GUIDELINES ---\n"
             "- Always be positive, safe, and educational.\n"
-            "- Avoid sensitive, violent, or inappropriate topics.\n"
+            "- Avoid sensitive/violent/inappropriate topics.\n"
             "- Never ask for personal data.\n"
             "- Keep responses under 40 words for natural speech.\n"
             "- If you don't know something, say so politely.\n"
-            "- Don't use the emojis in the sentence.\n"
+            "- No emojis.\n"
             "\nNow, respond like a friendly tutor talking directly to a student."
         )
 
-
+    # ---------- Audio ----------
     def _calibrate_microphone(self):
         """Calibrate microphone for background noise"""
         try:
@@ -100,11 +108,11 @@ class MayaAI:
             logger.error(f"Microphone setup failed: {e}")
 
     def listen_for_speech(self) -> str:
-        """Listen to the user's voice and convert to text"""
+        """Listen to user voice"""
         try:
             with self.microphone as source:
                 print("\n🎤 Listening... Speak now!")
-                audio = self.recognizer.listen(source, timeout=10, phrase_time_limit=5)
+                audio = self.recognizer.listen(source, timeout=15, phrase_time_limit=10)
             print("Processing speech...")
             text = self.recognizer.recognize_google(audio)
             return text.strip()
@@ -118,7 +126,7 @@ class MayaAI:
             return ""
 
     async def speak(self, text: str):
-        """Convert AI response to speech"""
+        """Convert AI response to speech + animate avatar"""
         if not text.strip():
             return
         print(f"Maya: {text}")
@@ -127,11 +135,38 @@ class MayaAI:
             with tempfile.NamedTemporaryFile(delete=False, suffix=".mp3") as tmp_file:
                 audio_path = tmp_file.name
                 await communicate.save(audio_path)
-            playsound(audio_path)
+
+            # Play sound in a thread
+            import threading
+            threading.Thread(target=playsound, args=(audio_path,), daemon=True).start()
+
+            # Animate mouth while sound plays
+            start_time = time.time()
+            duration = len(text) * 0.07  # rough speech length estimate
+
+            while time.time() - start_time < duration:
+                self.current_face = random.choice(
+                    [self.mouth_closed, self.mouth_half, self.mouth_open]
+                )
+                self.update_screen()
+                self.clock.tick(5)  # ~200ms per frame
+
+            # Reset to closed mouth
+            self.current_face = self.mouth_closed
+            self.update_screen()
+
             os.unlink(audio_path)
+
         except Exception as e:
             logger.error(f"TTS error: {e}")
 
+    # ---------- Screen ----------
+    def update_screen(self):
+        self.screen.fill((255, 255, 255))  # white background
+        self.screen.blit(self.current_face, (0, 0))
+        pygame.display.flip()
+
+    # ---------- AI ----------
     async def get_ai_response(self, user_input: str) -> str:
         """Get AI response with memory"""
         if not self.ai_client:
@@ -139,7 +174,7 @@ class MayaAI:
 
         try:
             messages = [SystemMessage(content=self.get_system_prompt())]
-            history = self.memory.chat_memory.messages[:]  # keep recent context
+            history = self.memory.chat_memory.messages[:]  # context
             messages.extend(history)
             messages.append(HumanMessage(content=user_input))
 
@@ -156,7 +191,7 @@ class MayaAI:
             return self._get_fallback_response(user_input)
 
     def _get_fallback_response(self, user_input: str) -> str:
-        """Fallback responses when AI is unavailable"""
+        """Fallback responses when AI unavailable"""
         user_lower = user_input.lower()
         if any(word in user_lower for word in ['sad', 'upset', 'bad', 'terrible']):
             responses = [
@@ -189,8 +224,8 @@ class MayaAI:
         goodbye_words = ['bye', 'goodbye', 'quit', 'exit', 'stop', 'end']
         return any(word in text.lower() for word in goodbye_words)
 
+    # ---------- Conversation Loop ----------
     async def run_conversation(self):
-        """Main conversation loop with inactivity + session timeout"""
         print("=" * 50)
         print("🤖 Maya AI Companion — Real-Time Chat")
         print("=" * 50)
@@ -205,25 +240,28 @@ class MayaAI:
         SESSION_LIMIT = 5 * 60        # 5 minutes
         INACTIVITY_LIMIT = 2 * 60     # 2 minutes
 
-        while True:
+        running = True
+        while running:
+            # Handle Pygame events
+            for event in pygame.event.get():
+                if event.type == pygame.QUIT:
+                    await self.speak("Alright, I'll see you later!")
+                    running = False
+
             try:
-                # Check total session timeout
+                # Timeouts
                 if time.time() - session_start > SESSION_LIMIT:
                     await self.speak("Our session is ending now. See you next time!")
                     break
-
-                # Check inactivity timeout
                 if time.time() - last_activity > INACTIVITY_LIMIT:
                     await self.speak("I didn’t hear you for a while, so I’ll end our chat. Bye!")
                     break
 
                 user_input = self.listen_for_speech()
-
                 if not user_input:
-                    # no input, loop continues, but still track inactivity
                     continue
 
-                last_activity = time.time()  # reset inactivity timer
+                last_activity = time.time()
                 print(f"You: {user_input}")
 
                 if self.is_goodbye(user_input):
@@ -242,19 +280,19 @@ class MayaAI:
                 logger.error(f"Conversation error: {e}")
                 await self.speak("Oops, something went wrong. Let's try again.")
 
-        # Reset memory after session ends
+        # Cleanup
         self.memory.clear()
-
+        pygame.quit()
         print("\n" + "=" * 50)
         print("Conversation ended. Session memory cleared.")
         print("=" * 50)
-
 
 
 # ============ MAIN ============
 async def main():
     maya = MayaAI()
     await maya.run_conversation()
+
 
 if __name__ == "__main__":
     try:
